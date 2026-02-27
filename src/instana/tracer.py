@@ -13,7 +13,6 @@ from opentelemetry.trace import (
     Tracer,
     TracerProvider,
     _Links,
-    get_current_span as otel_get_current_span,
     use_span,
 )
 from opentelemetry.util import types
@@ -28,8 +27,7 @@ from instana.propagators.kafka_propagator import KafkaPropagator
 from instana.propagators.text_propagator import TextPropagator
 from instana.recorder import StanRecorder
 from instana.sampling import InstanaSampler, Sampler
-from instana.span.span import InstanaSpan
-from instana.span.span import get_current_span as instana_get_current_span
+from instana.span.span import InstanaSpan, get_current_span
 from instana.span_context import SpanContext
 from instana.util.ids import generate_id
 
@@ -110,21 +108,16 @@ class InstanaTracer(Tracer):
     def start_span(
         self,
         name: str,
-        context: Optional[Context] = None,
+        span_context: Optional[SpanContext] = None,
         kind: SpanKind = SpanKind.INTERNAL,
         attributes: types.Attributes = None,
         links: _Links = None,
         start_time: Optional[int] = None,
         record_exception: bool = True,
         set_status_on_exception: bool = True,
-        span_context: Optional[SpanContext] = None,
     ) -> InstanaSpan:
-        # Extract span_context from context if needed (OpenTelemetry API compliance)
-        if context is not None and span_context is None:
-            span_context = otel_get_current_span(context).get_span_context()  # type: ignore[assignment]
-        
         parent_context = (
-            span_context if span_context else instana_get_current_span().get_span_context()
+            span_context if span_context else get_current_span().get_span_context()
         )
 
         if parent_context and not isinstance(parent_context, SpanContext):
@@ -147,7 +140,7 @@ class InstanaTracer(Tracer):
     def start_as_current_span(
         self,
         name: str,
-        context: Optional[Context] = None,
+        span_context: Optional[SpanContext] = None,
         kind: SpanKind = SpanKind.INTERNAL,
         attributes: types.Attributes = None,
         links: _Links = None,
@@ -155,23 +148,16 @@ class InstanaTracer(Tracer):
         record_exception: bool = True,
         set_status_on_exception: bool = True,
         end_on_exit: bool = True,
-        span_context: Optional[SpanContext] = None,
     ) -> Iterator[InstanaSpan]:
-        # Extract span_context from context if needed (OpenTelemetry API compliance)
-        if context is not None and span_context is None:
-            span_context = otel_get_current_span(context).get_span_context()  # type: ignore[assignment]
-        
-        # Pass both context and span_context - the guard in start_span prevents redundant extraction
         span = self.start_span(
             name=name,
-            context=context,
+            span_context=span_context,
             kind=kind,
             attributes=attributes,
             links=links,
             start_time=start_time,
             record_exception=record_exception,
             set_status_on_exception=set_status_on_exception,
-            span_context=span_context,
         )
         with use_span(
             span,
